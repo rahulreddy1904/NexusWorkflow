@@ -40,8 +40,17 @@ api.interceptors.response.use(
 
 export const apiClient = {
   // Auth
-  login: async (email: string, password: string) => {
-    const res = await api.post('/auth/login', { email, password });
+  login: async (
+    email: string,
+    password: string,
+    opts?: {
+      name?: string;
+      workspaceAction?: 'signin' | 'create' | 'join';
+      workspaceName?: string;
+      joinCode?: string;
+    }
+  ) => {
+    const res = await api.post('/auth/login', { email, password, ...opts });
     return res.data;
   },
   register: async (email: string, password: string, name: string, opts?: { workspaceAction?: 'create' | 'join' | 'none'; workspaceName?: string; joinCode?: string }) => {

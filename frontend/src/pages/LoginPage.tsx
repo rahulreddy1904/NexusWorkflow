@@ -1,16 +1,39 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Sparkles, AlertCircle, ArrowRight, Lock, Mail, ExternalLink, Copy, Check } from 'lucide-react';
+import {
+  Sparkles,
+  AlertCircle,
+  ArrowRight,
+  ExternalLink,
+  Copy,
+  Check,
+  KeyRound,
+  Building2,
+  LogIn,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
+
+type AuthMode = 'signin' | 'join' | 'create';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const initialMode: AuthMode =
+    (searchParams.get('mode') as AuthMode) ||
+    (searchParams.get('code') || searchParams.get('join') ? 'join' : 'signin');
+
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [name, setName] = useState<string>('');
+  const [workspaceName, setWorkspaceName] = useState<string>('');
+  const [joinCode, setJoinCode] = useState<string>(
+    searchParams.get('code') || searchParams.get('join') || ''
+  );
   const [error, setError] = useState<string | null>(searchParams.get('oauth_error'));
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -25,13 +48,31 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (authMode === 'join' && !joinCode.trim()) {
+      setError('Please enter a workspace invite code (e.g. NX-DEMO-2026).');
+      return;
+    }
+    if (authMode === 'create' && !workspaceName.trim()) {
+      setError('Please provide a name for your workspace.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, {
+        workspaceAction: authMode,
+        name: name.trim() || undefined,
+        workspaceName: authMode === 'create' ? workspaceName.trim() : undefined,
+        joinCode: authMode === 'join' ? joinCode.trim().toUpperCase() : undefined,
+      });
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Login failed. Please check your credentials.');
+      setError(
+        err.response?.data?.error?.message ||
+          'Authentication failed. Please check your credentials or join code.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -40,9 +81,10 @@ export const LoginPage: React.FC = () => {
   const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
     setError(null);
     try {
-      const res = provider === 'google'
-        ? await apiClient.initiateGoogleOAuth()
-        : await apiClient.initiateFacebookOAuth();
+      const res =
+        provider === 'google'
+          ? await apiClient.initiateGoogleOAuth()
+          : await apiClient.initiateFacebookOAuth();
 
       if (res.configured && res.redirectUrl) {
         window.location.href = res.redirectUrl;
@@ -61,8 +103,14 @@ export const LoginPage: React.FC = () => {
   };
 
   const fillDemoCredentials = () => {
+    setAuthMode('signin');
     setEmail('demo@nexusworkflow.ai');
     setPassword('NexusDemo2026!');
+  };
+
+  const fillDemoJoin = () => {
+    setAuthMode('join');
+    setJoinCode('NX-DEMO-2026');
   };
 
   return (
@@ -83,7 +131,7 @@ export const LoginPage: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-[#12151c] py-8 px-6 shadow-2xl border border-[#222733] sm:rounded-2xl sm:px-10 space-y-6">
+        <div className="bg-[#12151c] py-7 px-6 shadow-2xl border border-[#222733] sm:rounded-2xl sm:px-8 space-y-5">
           {/* Demo User Fast Fill Banner */}
           <div className="bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3 flex items-center justify-between text-xs">
             <div>
@@ -99,6 +147,93 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Interactive Login Action Tabs (Sign In / Join by Code / Create Workspace) */}
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              Choose Workspace Action
+            </div>
+            <div className="bg-[#0b0e14] p-1 rounded-xl border border-[#1f2533] grid grid-cols-3 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signin');
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  authMode === 'signin'
+                    ? 'bg-[#1a2130] text-cyan-400 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#131722]'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('join');
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  authMode === 'join'
+                    ? 'bg-[#1a2130] text-cyan-400 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#131722]'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Join by Code</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('create');
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  authMode === 'create'
+                    ? 'bg-[#1a2130] text-cyan-400 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#131722]'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>New Space</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Mode Context Description Banner */}
+          {authMode === 'signin' && (
+            <div className="text-xs text-slate-400 flex items-center gap-2 bg-[#0e121a] px-3 py-2 rounded-lg border border-[#1b2230]">
+              <LogIn className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+              <span>Sign in to access your existing workspaces as owner or operator.</span>
+            </div>
+          )}
+
+          {authMode === 'join' && (
+            <div className="text-xs text-slate-300 flex items-center justify-between bg-indigo-950/30 px-3 py-2 rounded-lg border border-indigo-800/40">
+              <div className="flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                <span>Join an existing team workspace as an operator.</span>
+              </div>
+              <button
+                type="button"
+                onClick={fillDemoJoin}
+                className="text-[11px] font-mono text-cyan-300 hover:text-cyan-200 underline font-semibold"
+              >
+                Try NX-DEMO-2026
+              </button>
+            </div>
+          )}
+
+          {authMode === 'create' && (
+            <div className="text-xs text-slate-300 flex items-center gap-2 bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-800/40">
+              <Building2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+              <span>You will be the Workspace Owner and generate an invite code for your team.</span>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg bg-rose-950/40 border border-rose-900 p-3 flex items-start gap-2.5 text-xs text-rose-300">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -106,7 +241,74 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-3.5" onSubmit={handleSubmit}>
+            {/* Join Workspace Code Field */}
+            {authMode === 'join' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Workspace Invite Code <span className="text-rose-400">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="NX-DEMO-2026"
+                    className="w-full px-3.5 py-2.5 text-sm font-mono tracking-wider bg-[#171b24] border border-[#262c3d] rounded-xl text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Ask your workspace owner for their team code, or click{' '}
+                  <span
+                    onClick={fillDemoJoin}
+                    className="text-cyan-400 font-mono cursor-pointer hover:underline"
+                  >
+                    NX-DEMO-2026
+                  </span>{' '}
+                  to test.
+                </p>
+              </div>
+            )}
+
+            {/* Create Workspace Name Field */}
+            {authMode === 'create' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Workspace Name <span className="text-rose-400">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    placeholder="e.g. Acme Global Operations"
+                    className="w-full px-3.5 py-2.5 text-sm bg-[#171b24] border border-[#262c3d] rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  You will have full owner controls and an invite code will be created automatically.
+                </p>
+              </div>
+            )}
+
+            {/* Name field for new users joining or creating */}
+            {authMode !== 'signin' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Your Full Name <span className="text-slate-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Rahul Reddy"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#171b24] border border-[#262c3d] rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
               <div className="relative">
@@ -138,20 +340,36 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-semibold tracking-wide text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 focus:outline-none disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2"
+              className="w-full mt-3 py-2.5 px-4 rounded-xl text-xs font-semibold tracking-wide text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 focus:outline-none disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>{isLoading ? 'Signing in...' : 'Sign In'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {isLoading ? (
+                <span>Processing...</span>
+              ) : authMode === 'join' ? (
+                <>
+                  <span>Join Workspace by Code</span>
+                  <KeyRound className="w-4 h-4" />
+                </>
+              ) : authMode === 'create' ? (
+                <>
+                  <span>Create Workspace & Take Ownership</span>
+                  <Building2 className="w-4 h-4" />
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
           {/* Social Logins */}
-          <div className="relative">
+          <div className="relative pt-2">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-800" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-slate-900 px-2 text-slate-500">Or continue with</span>
+              <span className="bg-[#12151c] px-2 text-slate-500">Or continue with</span>
             </div>
           </div>
 
@@ -194,11 +412,68 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="text-center text-xs text-slate-400">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-semibold text-brand-400 hover:text-brand-300">
-              Create a workspace
-            </Link>
+          {/* Inline switcher footer */}
+          <div className="text-center text-xs text-slate-400 pt-2 border-t border-[#1d2332]">
+            {authMode === 'signin' && (
+              <p>
+                Need to collaborate with a team?{' '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('join')}
+                  className="font-semibold text-cyan-400 hover:underline"
+                >
+                  Join by Code
+                </button>
+                {' or '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('create')}
+                  className="font-semibold text-indigo-400 hover:underline"
+                >
+                  Create Workspace
+                </button>
+              </p>
+            )}
+            {authMode === 'join' && (
+              <p>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('signin')}
+                  className="font-semibold text-cyan-400 hover:underline"
+                >
+                  Sign In
+                </button>
+                {' or '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('create')}
+                  className="font-semibold text-indigo-400 hover:underline"
+                >
+                  Create Workspace as Owner
+                </button>
+              </p>
+            )}
+            {authMode === 'create' && (
+              <p>
+                Have an invite code instead?{' '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('join')}
+                  className="font-semibold text-cyan-400 hover:underline"
+                >
+                  Join by Code
+                </button>
+                {' or '}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('signin')}
+                  className="font-semibold text-cyan-400 hover:underline"
+                >
+                  Sign In
+                </button>
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -8,6 +8,13 @@ interface RegisterOptions {
   joinCode?: string;
 }
 
+export interface LoginOptions {
+  name?: string;
+  workspaceAction?: 'signin' | 'create' | 'join';
+  workspaceName?: string;
+  joinCode?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   workspace: Workspace | null;
@@ -15,7 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasWorkspace: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, opts?: LoginOptions) => Promise<void>;
   register: (email: string, password: string, name: string, opts?: RegisterOptions) => Promise<void>;
   createWorkspace: (name: string) => Promise<Workspace>;
   joinWorkspace: (joinCode: string) => Promise<Workspace>;
@@ -58,8 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshSession();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await apiClient.login(email, password);
+  const login = async (email: string, password: string, opts?: LoginOptions) => {
+    const res = await apiClient.login(email, password, opts);
     const { token: newToken, user: newUser, workspace: newWs } = res.data;
     localStorage.setItem('nexus_token', newToken);
     setToken(newToken);

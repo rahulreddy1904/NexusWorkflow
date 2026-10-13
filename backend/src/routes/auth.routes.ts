@@ -22,6 +22,10 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  name: z.string().optional(),
+  workspaceAction: z.enum(['signin', 'create', 'join']).optional().default('signin'),
+  workspaceName: z.string().optional(),
+  joinCode: z.string().optional(),
 });
 
 // Register
@@ -121,54 +125,133 @@ router.post('/register', validateBody(registerSchema), async (req: Request, res:
   });
 });
 
-// Login
+// Login (Supports standard sign-in, join by code, and create workspace right at login)
 router.post('/login', validateBody(loginSchema), async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, name, workspaceAction, workspaceName, joinCode } = req.body;
 
-  const userRes = await query('SELECT * FROM users WHERE email = $1', [email]);
+  let userRes = await query('SELECT * FROM users WHERE email = $1', [email]);
+  let user: any = null;
+
   if (userRes.rows.length === 0) {
-    res.status(401).json({
-      success: false,
-      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
-    });
-    return;
+    if (workspaceAction === 'join' || workspaceAction === 'create') {
+      const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const passwordHash = await hashPassword(password);
+      const displayName = name?.trim() || email.split('@')[0];
+
+      await query(`
+        INSERT INTO users (id, email, password_hash, name)
+        VALUES ($1, $2, $3, $4)
+      `, [userId, email, passwordHash, displayName]);
+
+      user = { id: userId, email, password_hash: passwordHash, name: displayName, avatar_url: null };
+    } else {
+      res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'No account found with this email. Switch to "Join with Code" or "Create Workspace" above to get started.' },
+      });
+      return;
+    }
+  } else {
+    user = userRes.rows[0];
+    if (!user.password_hash) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'OAUTH_ONLY_ACCOUNT', message: 'This account uses single sign-on. Please sign in with Google or Facebook.' },
+      });
+      return;
+    }
+
+    const matches = await verifyPassword(password, user.password_hash);
+    if (!matches) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+      });
+      return;
+    }
   }
 
-  const user = userRes.rows[0];
-  if (!user.password_hash) {
-    res.status(400).json({
-      success: false,
-      error: { code: 'OAUTH_ONLY_ACCOUNT', message: 'This account uses single sign-on. Please sign in with Google or Facebook.' },
-    });
-    return;
+  let ws: any = null;
+
+  if (workspaceAction === 'join' && joinCode) {
+    const cleanCode = joinCode.trim().toUpperCase();
+    const wsRes = await query('SELECT * FROM workspaces WHERE UPPER(join_code) = $1', [cleanCode]);
+    if (wsRes.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'INVALID_JOIN_CODE', message: `Workspace invite code '${joinCode}' was not found. Please confirm with your workspace owner.` },
+      });
+      return;
+    }
+
+    const targetWs = wsRes.rows[0];
+    const memberCheck = await query(
+      'SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2',
+      [targetWs.id, user.id]
+    );
+
+    let role = 'operator';
+    if (memberCheck.rows.length > 0) {
+      role = memberCheck.rows[0].role;
+    } else {
+      if (targetWs.owner_id === user.id) role = 'owner';
+      await query(`
+        INSERT INTO workspace_members (id, workspace_id, user_id, role)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (workspace_id, user_id) DO NOTHING
+      `, [`wsm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, targetWs.id, user.id, role]);
+    }
+
+    ws = {
+      id: targetWs.id,
+      name: targetWs.name,
+      slug: targetWs.slug,
+      joinCode: targetWs.join_code,
+      role,
+    };
+  } else if (workspaceAction === 'create' && workspaceName) {
+    const wsId = `ws_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const wsTitle = workspaceName.trim();
+    const slug = `${wsTitle.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 5)}`;
+    const generatedCode = `NX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    await query(`
+      INSERT INTO workspaces (id, name, slug, join_code, owner_id)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [wsId, wsTitle, slug, generatedCode, user.id]);
+
+    await query(`
+      INSERT INTO workspace_members (id, workspace_id, user_id, role)
+      VALUES ($1, $2, $3, 'owner')
+      ON CONFLICT (workspace_id, user_id) DO NOTHING
+    `, [`wsm_${Date.now()}`, wsId, user.id]);
+
+    ws = {
+      id: wsId,
+      name: wsTitle,
+      slug,
+      joinCode: generatedCode,
+      role: 'owner',
+    };
+  } else {
+    // Default signin: load existing workspace membership
+    const memberRes = await query(`
+      SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug, w.join_code
+      FROM workspace_members wm
+      JOIN workspaces w ON w.id = wm.workspace_id
+      WHERE wm.user_id = $1
+      ORDER BY wm.created_at ASC
+      LIMIT 1
+    `, [user.id]);
+
+    ws = memberRes.rows[0] ? {
+      id: memberRes.rows[0].workspace_id,
+      name: memberRes.rows[0].workspace_name,
+      slug: memberRes.rows[0].slug,
+      joinCode: memberRes.rows[0].join_code,
+      role: memberRes.rows[0].role,
+    } : null;
   }
-
-  const matches = await verifyPassword(password, user.password_hash);
-  if (!matches) {
-    res.status(401).json({
-      success: false,
-      error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
-    });
-    return;
-  }
-
-  // Get workspace membership
-  const memberRes = await query(`
-    SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug, w.join_code
-    FROM workspace_members wm
-    JOIN workspaces w ON w.id = wm.workspace_id
-    WHERE wm.user_id = $1
-    ORDER BY wm.created_at ASC
-    LIMIT 1
-  `, [user.id]);
-
-  const ws = memberRes.rows[0] ? {
-    id: memberRes.rows[0].workspace_id,
-    name: memberRes.rows[0].workspace_name,
-    slug: memberRes.rows[0].slug,
-    joinCode: memberRes.rows[0].join_code,
-    role: memberRes.rows[0].role,
-  } : null;
 
   const token = signJwt({
     userId: user.id,
@@ -190,7 +273,7 @@ router.post('/login', validateBody(loginSchema), async (req: Request, res: Respo
       eventType: 'auth.login',
       actorType: 'user',
       actorId: user.id,
-      payload: { email },
+      payload: { email, workspaceAction },
     });
   }
 
