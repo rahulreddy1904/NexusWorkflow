@@ -73,26 +73,11 @@ export async function createAndPlanWorkflow(params: CreateWorkflowParams) {
     for (const step of plan.steps) {
       const stepId = `stp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}_${step.step_index}`;
       let approvalId: string | null = null;
-
       if (step.requires_approval) {
         approvalId = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        await query(`
-          INSERT INTO workflow_approvals (
-            id, workflow_run_id, step_id, workspace_id, action_type,
-            action_summary, risk_level, risk_reason, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
-        `, [
-          approvalId,
-          runId,
-          stepId,
-          params.workspaceId,
-          step.tool_name,
-          step.title,
-          plan.risk_assessment.risk_level,
-          step.approval_reason || 'Sensitive action requiring operational sign-off.',
-        ]);
       }
 
+      // Insert step first
       await query(`
         INSERT INTO workflow_steps (
           id, workflow_run_id, step_index, title, description, assigned_agent,
@@ -110,6 +95,25 @@ export async function createAndPlanWorkflow(params: CreateWorkflowParams) {
         step.requires_approval,
         approvalId,
       ]);
+
+      // If approval required, insert approval referencing the step_id
+      if (step.requires_approval && approvalId) {
+        await query(`
+          INSERT INTO workflow_approvals (
+            id, workflow_run_id, step_id, workspace_id, action_type,
+            action_summary, risk_level, risk_reason, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+        `, [
+          approvalId,
+          runId,
+          stepId,
+          params.workspaceId,
+          step.tool_name,
+          step.title,
+          plan.risk_assessment.risk_level,
+          step.approval_reason || 'Sensitive action requiring operational sign-off.',
+        ]);
+      }
     }
 
     await recordAuditEvent({
