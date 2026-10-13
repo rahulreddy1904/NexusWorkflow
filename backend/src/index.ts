@@ -27,8 +27,28 @@ app.use(helmet({
 }));
 
 // CORS Configuration
+const allowedOrigins = [
+  ...env.CLIENT_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean),
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
 app.use(cors({
-  origin: [env.CLIENT_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (requestOrigin, callback) => {
+    if (!requestOrigin) return callback(null, true);
+    if (
+      allowedOrigins.includes(requestOrigin) ||
+      allowedOrigins.includes('*') ||
+      /^http:\/\/localhost:\d+$/.test(requestOrigin) ||
+      /^http:\/\/127\.0\.0\.1:\d+$/.test(requestOrigin)
+    ) {
+      return callback(null, true);
+    }
+    if (env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin ${requestOrigin} not allowed by CORS`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
