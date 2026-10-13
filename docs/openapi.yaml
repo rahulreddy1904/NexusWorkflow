@@ -1,0 +1,258 @@
+openapi: 3.0.3
+info:
+  title: NEXUS Workflow Orchestration API
+  version: 1.0.0
+  description: Autonomous Multi-Agent AI Workflow Orchestration API with Human-in-the-Loop Governance
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local Development Server
+  - url: https://your-backend.onrender.com/api/v1
+    description: Production Cloud Server
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new operator account and primary workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+                workspaceName: { type: string }
+      responses:
+        '201':
+          description: Account created successfully
+
+  /auth/login:
+    post:
+      summary: Authenticate user session with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful, returns session JWT and sets cookie
+
+  /auth/me:
+    get:
+      summary: Get current authenticated user session and workspace
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile and active workspace
+
+  /auth/oauth/status:
+    get:
+      summary: Get status of Google and Facebook OAuth configurations
+      responses:
+        '200':
+          description: Detailed OAuth provider readiness report
+
+  /workflows:
+    post:
+      summary: Submit a new operational request and trigger autonomous planning
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, goal]
+              properties:
+                title: { type: string }
+                goal: { type: string }
+                context: { type: string }
+                constraints: { type: array, items: { type: string } }
+                priority: { type: string, enum: [low, normal, high, urgent] }
+                templateId: { type: string }
+      responses:
+        '201':
+          description: Workflow created and planner agent invoked
+    get:
+      summary: List workflow runs with filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Paginated workflow items
+
+  /workflows/{id}:
+    get:
+      summary: Get complete workflow execution detail, plan steps, artifacts, and tasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Full workflow run object with associated steps and state
+
+  /workflows/{id}/pause:
+    post:
+      summary: Pause an executing workflow run
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workflow paused
+
+  /workflows/{id}/resume:
+    post:
+      summary: Resume a paused workflow run
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workflow resumed
+
+  /workflows/{id}/cancel:
+    post:
+      summary: Cancel an active workflow run
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workflow cancelled
+
+  /workflows/{id}/retry/{stepId}:
+    post:
+      summary: Retry a failed step execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: stepId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Step execution retried
+
+  /approvals:
+    get:
+      summary: List Human-in-the-Loop pending or historical approvals
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected, all], default: pending }
+      responses:
+        '200':
+          description: Approval queue items
+
+  /approvals/{id}/decide:
+    post:
+      summary: Approve or reject a gated workflow action
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved]
+              properties:
+                approved: { type: boolean }
+                note: { type: string }
+      responses:
+        '200':
+          description: Approval decision recorded and engine state resumed
+
+  /templates:
+    get:
+      summary: List operational workflow blueprint templates
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Available system and workspace templates
+
+  /config/status:
+    get:
+      summary: Check real-time integration status of Gemini AI, Supabase DB, and OAuth providers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Diagnostic configuration report
+
+  /audit:
+    get:
+      summary: Query system audit event ledger
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: type
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Audit ledger events
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

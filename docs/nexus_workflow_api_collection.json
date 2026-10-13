@@ -1,0 +1,87 @@
+{
+  "info": {
+    "name": "NEXUS Workflow API Collection",
+    "description": "Postman / Bruno compatible collection for testing NEXUS Workflow API endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Auth - Login Demo User",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/login",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo@nexusworkflow.ai\",\n  \"password\": \"NexusDemo2026!\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Workflows - List All",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/workflows?page=1&limit=10",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ]
+      }
+    },
+    {
+      "name": "Workflows - Create Request",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/workflows",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Security Patch Verification\",\n  \"goal\": \"Audit vulnerability CVE-2026-1104 in auth cluster, apply mitigation task, and compile RCA document.\",\n  \"constraints\": [\"Require CISO approval\", \"Zero downtime\"],\n  \"priority\": \"urgent\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Approvals - List Pending",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/approvals?status=pending",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ]
+      }
+    },
+    {
+      "name": "Config - System Status",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/config/status",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ]
+      }
+    }
+  ]
+}
