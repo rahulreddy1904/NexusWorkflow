@@ -6,6 +6,11 @@ const router = Router();
 
 // List audit events
 router.get('/', authenticate, async (req: Request, res: Response) => {
+  if (!req.user!.workspaceId) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+
   const limit = Math.min(parseInt(req.query.limit as string || '50', 10), 100);
   const eventType = req.query.type as string;
 

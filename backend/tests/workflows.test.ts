@@ -47,7 +47,7 @@ describe('Workflow Engine & Orchestration Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.runId).toBeDefined();
     expect(res.body.data.plan.steps.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 30000);
 
   it('should fetch workflow run details including steps, artifacts, and tasks', async () => {
     const res = await request(app)

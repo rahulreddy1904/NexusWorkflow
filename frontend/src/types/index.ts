@@ -10,7 +10,8 @@ export interface Workspace {
   id: string;
   name: string;
   slug: string;
-  role: 'owner' | 'admin' | 'operator' | 'viewer';
+  joinCode?: string;
+  role: 'owner' | 'admin' | 'operator' | 'viewer' | 'member';
 }
 
 export interface WorkflowTemplate {

@@ -30,30 +30,35 @@ export async function initDb(): Promise<void> {
   const dbUrl = process.env.DATABASE_URL?.trim();
 
   if (dbUrl && dbUrl.length > 0) {
-    try {
-      console.log('[DB] Connecting to Supabase PostgreSQL at:', dbUrl.replace(/:[^:@]+@/, ':***@'));
-      const pool = new pg.Pool({
-        connectionString: dbUrl,
-        ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
-      });
+    if (dbUrl.startsWith('http://') || dbUrl.startsWith('https://')) {
+      console.warn('[DB] Notice: DATABASE_URL is set to an HTTP(S) URL (' + dbUrl + '). Supabase PostgreSQL requires a postgresql:// connection URI (e.g. postgresql://postgres.[ref]:[password]@db.[ref].supabase.co:5432/postgres). Falling back to local PostgreSQL engine.');
+      connectionError = 'DATABASE_URL is set to an HTTP URL. Use a postgresql:// URI from Supabase Settings > Database.';
+    } else {
+      try {
+        console.log('[DB] Connecting to Supabase PostgreSQL at:', dbUrl.replace(/:[^:@]+@/, ':***@'));
+        const pool = new pg.Pool({
+          connectionString: dbUrl,
+          ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+          max: 10,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 5000,
+        });
 
-      // Test connection
-      const client = await pool.connect();
-      await client.query('SELECT 1 as connected');
-      client.release();
+        // Test connection
+        const client = await pool.connect();
+        await client.query('SELECT 1 as connected');
+        client.release();
 
-      pgPool = pool;
-      activeMode = 'supabase_postgres';
-      connectionError = undefined;
-      console.log('[DB] Successfully connected to live Supabase PostgreSQL database.');
-      return;
-    } catch (err: any) {
-      console.warn('[DB] Failed to connect to live DATABASE_URL:', err.message);
-      connectionError = err.message;
-      console.log('[DB] Falling back to high-fidelity in-memory PostgreSQL engine for local development.');
+        pgPool = pool;
+        activeMode = 'supabase_postgres';
+        connectionError = undefined;
+        console.log('[DB] Successfully connected to live Supabase PostgreSQL database.');
+        return;
+      } catch (err: any) {
+        console.warn('[DB] Failed to connect to live DATABASE_URL:', err.message);
+        connectionError = err.message;
+        console.log('[DB] Falling back to high-fidelity in-memory PostgreSQL engine for local development.');
+      }
     }
   } else {
     console.log('[DB] No DATABASE_URL configured in backend/.env.');

@@ -66,34 +66,34 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen bg-[#0f1115] text-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <Link to="/" className="inline-flex items-center gap-2 mb-4">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-white tracking-wider text-lg">
-            NEXUS <span className="text-brand-400 font-medium">WORKFLOW</span>
+          <span className="font-extrabold text-white tracking-wider text-lg">
+            MULTI <span className="text-cyan-400 font-semibold text-xs px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/40">AI</span>
           </span>
         </Link>
-        <h2 className="text-2xl font-extrabold text-slate-100">Sign in to your workspace</h2>
+        <h2 className="text-2xl font-black text-white tracking-tight">Sign in to your workspace</h2>
         <p className="mt-1 text-xs text-slate-400">
           Autonomous multi-agent orchestration with human governance
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-slate-900 py-8 px-6 shadow-xl border border-slate-800 sm:rounded-2xl sm:px-10 space-y-6">
+        <div className="bg-[#12151c] py-8 px-6 shadow-2xl border border-[#222733] sm:rounded-2xl sm:px-10 space-y-6">
           {/* Demo User Fast Fill Banner */}
-          <div className="bg-brand-950/40 border border-brand-800/80 rounded-xl p-3 flex items-center justify-between text-xs">
+          <div className="bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3 flex items-center justify-between text-xs">
             <div>
-              <span className="text-brand-300 font-semibold block">Quick Evaluator Login</span>
-              <span className="text-slate-400 text-[11px]">Demo account pre-seeded with sample workflows</span>
+              <span className="text-cyan-300 font-semibold block">Quick Evaluator Login</span>
+              <span className="text-slate-400 text-[11px]">Pre-configured workspace with live Gemini AI</span>
             </div>
             <button
               type="button"
               onClick={fillDemoCredentials}
-              className="px-2.5 py-1 rounded bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition-colors shadow-sm"
             >
               Fill Demo
             </button>
@@ -108,29 +108,29 @@ export const LoginPage: React.FC = () => {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-xs font-medium text-slate-300">Email Address</label>
-              <div className="mt-1 relative">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <div className="relative">
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#171b24] border border-[#262c3d] rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300">Password</label>
-              <div className="mt-1 relative">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <div className="relative">
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#171b24] border border-[#262c3d] rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                 />
               </div>
             </div>
@@ -138,9 +138,10 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 transition-colors shadow-sm"
+              className="w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-semibold tracking-wide text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 focus:outline-none disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              <span>{isLoading ? 'Signing in...' : 'Sign In'}</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 

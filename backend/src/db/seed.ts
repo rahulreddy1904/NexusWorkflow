@@ -28,13 +28,14 @@ export async function seedDevelopmentData(): Promise<void> {
   // 2. Create Workspace
   const workspaceId = 'ws_acme_ops_01';
   await query(`
-    INSERT INTO workspaces (id, name, slug, owner_id)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (slug) DO UPDATE SET name = $2;
+    INSERT INTO workspaces (id, name, slug, join_code, owner_id)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (slug) DO UPDATE SET name = $2, join_code = $4;
   `, [
     workspaceId,
     'Acme Global Operations',
     'acme-ops',
+    'NX-DEMO-2026',
     demoUserId
   ]);
 

@@ -14,6 +14,11 @@ const decisionSchema = z.object({
 
 // List approvals
 router.get('/', authenticate, async (req: Request, res: Response) => {
+  if (!req.user!.workspaceId) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+
   const status = req.query.status as string || 'pending';
 
   let sql = `

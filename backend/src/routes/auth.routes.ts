@@ -14,7 +14,9 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters long'),
   name: z.string().min(2).max(100),
+  workspaceAction: z.enum(['create', 'join', 'none']).optional().default('none'),
   workspaceName: z.string().min(2).max(100).optional(),
+  joinCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -24,7 +26,7 @@ const loginSchema = z.object({
 
 // Register
 router.post('/register', validateBody(registerSchema), async (req: Request, res: Response) => {
-  const { email, password, name, workspaceName } = req.body;
+  const { email, password, name, workspaceAction, workspaceName, joinCode } = req.body;
 
   // Check existing user
   const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
@@ -44,26 +46,51 @@ router.post('/register', validateBody(registerSchema), async (req: Request, res:
     VALUES ($1, $2, $3, $4)
   `, [userId, email, passwordHash, name]);
 
-  // Create primary workspace
-  const wsId = `ws_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const wsTitle = workspaceName || `${name.split(' ')[0]}'s Workspace`;
-  const slug = `${wsTitle.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 5)}`;
+  let activeWs: { id: string; name: string; slug: string; joinCode?: string; role: string } | null = null;
 
-  await query(`
-    INSERT INTO workspaces (id, name, slug, owner_id)
-    VALUES ($1, $2, $3, $4)
-  `, [wsId, wsTitle, slug, userId]);
+  if ((workspaceAction === 'create' && workspaceName) || Boolean(workspaceName)) {
+    const wsId = `ws_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const wsTitle = (workspaceName || `${name.split(' ')[0]}'s Workspace`).trim();
+    const slug = `${wsTitle.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 5)}`;
+    const generatedCode = `NX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-  await query(`
-    INSERT INTO workspace_members (id, workspace_id, user_id, role)
-    VALUES ($1, $2, $3, 'owner')
-  `, [`wsm_${Date.now()}`, wsId, userId]);
+    await query(`
+      INSERT INTO workspaces (id, name, slug, join_code, owner_id)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [wsId, wsTitle, slug, generatedCode, userId]);
+
+    await query(`
+      INSERT INTO workspace_members (id, workspace_id, user_id, role)
+      VALUES ($1, $2, $3, 'owner')
+    `, [`wsm_${Date.now()}`, wsId, userId]);
+
+    activeWs = { id: wsId, name: wsTitle, slug, joinCode: generatedCode, role: 'owner' };
+  } else if (workspaceAction === 'join' && joinCode) {
+    const cleanCode = joinCode.trim().toUpperCase();
+    const wsRes = await query('SELECT * FROM workspaces WHERE UPPER(join_code) = $1', [cleanCode]);
+    if (wsRes.rows.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_JOIN_CODE', message: `Workspace invite code '${joinCode}' was not found. Please check with your workspace owner.` },
+      });
+      return;
+    }
+
+    const targetWs = wsRes.rows[0];
+    await query(`
+      INSERT INTO workspace_members (id, workspace_id, user_id, role)
+      VALUES ($1, $2, $3, 'operator')
+      ON CONFLICT (workspace_id, user_id) DO NOTHING
+    `, [`wsm_${Date.now()}`, targetWs.id, userId]);
+
+    activeWs = { id: targetWs.id, name: targetWs.name, slug: targetWs.slug, joinCode: targetWs.join_code, role: 'operator' };
+  }
 
   const token = signJwt({
     userId,
     email,
-    workspaceId: wsId,
-    role: 'owner',
+    workspaceId: activeWs ? activeWs.id : '',
+    role: activeWs ? activeWs.role : 'member',
   });
 
   // Set HTTP-only cookie
@@ -74,20 +101,22 @@ router.post('/register', validateBody(registerSchema), async (req: Request, res:
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
-  await recordAuditEvent({
-    workspaceId: wsId,
-    eventType: 'auth.register',
-    actorType: 'user',
-    actorId: userId,
-    payload: { email },
-  });
+  if (activeWs) {
+    await recordAuditEvent({
+      workspaceId: activeWs.id,
+      eventType: 'auth.register',
+      actorType: 'user',
+      actorId: userId,
+      payload: { email, workspaceAction },
+    });
+  }
 
   res.status(201).json({
     success: true,
     data: {
       token,
       user: { id: userId, email, name, avatarUrl: null },
-      workspace: { id: wsId, name: wsTitle, slug, role: 'owner' },
+      workspace: activeWs,
     },
   });
 });
@@ -125,25 +154,27 @@ router.post('/login', validateBody(loginSchema), async (req: Request, res: Respo
 
   // Get workspace membership
   const memberRes = await query(`
-    SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug
+    SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug, w.join_code
     FROM workspace_members wm
     JOIN workspaces w ON w.id = wm.workspace_id
     WHERE wm.user_id = $1
+    ORDER BY wm.created_at ASC
     LIMIT 1
   `, [user.id]);
 
-  const ws = memberRes.rows[0] || {
-    workspace_id: 'ws_acme_ops_01',
-    role: 'operator',
-    workspace_name: 'Default Workspace',
-    slug: 'default',
-  };
+  const ws = memberRes.rows[0] ? {
+    id: memberRes.rows[0].workspace_id,
+    name: memberRes.rows[0].workspace_name,
+    slug: memberRes.rows[0].slug,
+    joinCode: memberRes.rows[0].join_code,
+    role: memberRes.rows[0].role,
+  } : null;
 
   const token = signJwt({
     userId: user.id,
     email: user.email,
-    workspaceId: ws.workspace_id,
-    role: ws.role,
+    workspaceId: ws ? ws.id : '',
+    role: ws ? ws.role : 'member',
   });
 
   res.cookie('nexus_session', token, {
@@ -153,20 +184,22 @@ router.post('/login', validateBody(loginSchema), async (req: Request, res: Respo
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
-  await recordAuditEvent({
-    workspaceId: ws.workspace_id,
-    eventType: 'auth.login',
-    actorType: 'user',
-    actorId: user.id,
-    payload: { email },
-  });
+  if (ws) {
+    await recordAuditEvent({
+      workspaceId: ws.id,
+      eventType: 'auth.login',
+      actorType: 'user',
+      actorId: user.id,
+      payload: { email },
+    });
+  }
 
   res.json({
     success: true,
     data: {
       token,
       user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatar_url },
-      workspace: { id: ws.workspace_id, name: ws.workspace_name, slug: ws.slug, role: ws.role },
+      workspace: ws,
     },
   });
 });
@@ -186,7 +219,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
   }
 
   const memberRes = await query(`
-    SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug
+    SELECT wm.workspace_id, wm.role, w.name as workspace_name, w.slug, w.join_code
     FROM workspace_members wm
     JOIN workspaces w ON w.id = wm.workspace_id
     WHERE wm.user_id = $1
@@ -199,7 +232,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     success: true,
     data: {
       user: userRes.rows[0],
-      workspace: ws ? { id: ws.workspace_id, name: ws.workspace_name, slug: ws.slug, role: ws.role } : null,
+      workspace: ws ? { id: ws.workspace_id, name: ws.workspace_name, slug: ws.slug, joinCode: ws.join_code, role: ws.role } : null,
     },
   });
 });

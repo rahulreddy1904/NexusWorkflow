@@ -44,8 +44,8 @@ export const apiClient = {
     const res = await api.post('/auth/login', { email, password });
     return res.data;
   },
-  register: async (email: string, password: string, name: string, workspaceName?: string) => {
-    const res = await api.post('/auth/register', { email, password, name, workspaceName });
+  register: async (email: string, password: string, name: string, opts?: { workspaceAction?: 'create' | 'join' | 'none'; workspaceName?: string; joinCode?: string }) => {
+    const res = await api.post('/auth/register', { email, password, name, ...opts });
     return res.data;
   },
   logout: async () => {
@@ -55,7 +55,7 @@ export const apiClient = {
     localStorage.removeItem('nexus_workspace');
     return res.data;
   },
-  getCurrentSession: async (): Promise<{ user: User; workspace: Workspace }> => {
+  getCurrentSession: async (): Promise<{ user: User; workspace: Workspace | null }> => {
     const res = await api.get('/auth/me');
     return res.data.data;
   },
@@ -151,9 +151,29 @@ export const apiClient = {
     return res.data.data;
   },
 
-  // Workspace
+  // Workspace Management & Sharing
   getWorkspaceSummary: async () => {
     const res = await api.get('/workspaces/current');
+    return res.data.data;
+  },
+  createWorkspace: async (name: string) => {
+    const res = await api.post('/workspaces/create', { name });
+    return res.data;
+  },
+  joinWorkspace: async (joinCode: string) => {
+    const res = await api.post('/workspaces/join', { joinCode });
+    return res.data;
+  },
+  listMyWorkspaces: async () => {
+    const res = await api.get('/workspaces/my-workspaces');
+    return res.data.data;
+  },
+  switchWorkspace: async (workspaceId: string) => {
+    const res = await api.post('/workspaces/switch', { workspaceId });
+    return res.data;
+  },
+  regenerateWorkspaceCode: async () => {
+    const res = await api.post('/workspaces/regenerate-code');
     return res.data.data;
   },
 };

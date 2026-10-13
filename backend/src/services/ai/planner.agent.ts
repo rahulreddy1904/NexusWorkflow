@@ -5,25 +5,25 @@ import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 
 export const planStepSchema = z.object({
-  step_index: z.number().int().positive(),
-  title: z.string().min(3).max(200),
-  description: z.string().min(5),
-  assigned_agent: z.enum(['triage_specialist', 'researcher', 'executor', 'reviewer']),
-  tool_name: z.string(),
-  tool_arguments: z.record(z.any()),
-  requires_approval: z.boolean().default(false),
-  approval_reason: z.string().optional(),
+  step_index: z.coerce.number().int().positive(),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1),
+  assigned_agent: z.enum(['triage_specialist', 'researcher', 'executor', 'reviewer']).catch('executor'),
+  tool_name: z.string().nullable().optional().transform(v => v || 'db_task_create'),
+  tool_arguments: z.record(z.any()).nullable().optional().transform(v => v || {}),
+  requires_approval: z.boolean().nullable().optional().transform(v => Boolean(v)),
+  approval_reason: z.string().nullable().optional().transform(v => v || undefined),
 });
 
 export const workflowPlanSchema = z.object({
-  plan_summary: z.string().min(10),
+  plan_summary: z.string().min(5),
   risk_assessment: z.object({
-    risk_level: z.enum(['low', 'medium', 'high', 'critical']),
-    impact_score: z.number().min(0).max(100),
-    human_review_required: z.boolean(),
-    risk_factors: z.array(z.string()).default([]),
+    risk_level: z.enum(['low', 'medium', 'high', 'critical']).catch('medium'),
+    impact_score: z.coerce.number().min(0).max(100).catch(50),
+    human_review_required: z.boolean().catch(false),
+    risk_factors: z.array(z.string()).nullable().optional().transform(v => v || []),
   }),
-  steps: z.array(planStepSchema).min(2).max(env.WORKFLOW_MAX_STEPS),
+  steps: z.array(planStepSchema).min(1).max(env.WORKFLOW_MAX_STEPS),
 });
 
 export type WorkflowPlan = z.infer<typeof workflowPlanSchema>;

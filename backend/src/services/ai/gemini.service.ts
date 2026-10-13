@@ -42,20 +42,22 @@ export class GeminiService {
       );
     }
 
-    let attempts = 0;
+    const candidateModels = [this.model, 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    // Deduplicate models
+    const uniqueModels = [...new Set(candidateModels)];
+
     let lastError: any = null;
 
-    while (attempts < this.maxRetries) {
-      attempts++;
+    for (const modelToTry of uniqueModels) {
       try {
-        logger.info(`Invoking Gemini model '${this.model}' (attempt ${attempts}/${this.maxRetries})`);
+        logger.info(`Invoking Gemini model '${modelToTry}'`);
 
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Gemini API call timed out after ${this.timeoutMs}ms`)), this.timeoutMs)
         );
 
         const callPromise = this.client.models.generateContent({
-          model: this.model,
+          model: modelToTry,
           contents: prompt,
           config: {
             systemInstruction: systemInstruction || 'You are an autonomous operations orchestration engine. Output valid JSON only.',
@@ -75,21 +77,18 @@ export class GeminiService {
         return JSON.parse(cleaned) as T;
       } catch (err: any) {
         lastError = err;
-        logger.warn(`Gemini call failed on attempt ${attempts}: ${err.message}`);
+        logger.warn(`Gemini call with '${modelToTry}' failed: ${err.message}`);
 
         if (err.message?.includes('API_KEY_INVALID') || err.message?.includes('401')) {
           throw new GeminiServiceError('Invalid Gemini API key provided.', 'GEMINI_KEY_INVALID', 401);
         }
 
-        if (attempts < this.maxRetries) {
-          // Exponential backoff
-          await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempts - 1)));
-        }
+        // If 503 high demand or 404, loop will try next candidate model (e.g. gemini-2.5-flash)
       }
     }
 
     throw new GeminiServiceError(
-      `Gemini request failed after ${this.maxRetries} attempts: ${lastError?.message}`,
+      `Gemini request failed across models: ${lastError?.message}`,
       'GEMINI_UNAVAILABLE',
       502
     );

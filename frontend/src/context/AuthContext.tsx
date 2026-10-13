@@ -2,14 +2,25 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Workspace } from '../types';
 import { apiClient } from '../api/client';
 
+interface RegisterOptions {
+  workspaceAction?: 'create' | 'join' | 'none';
+  workspaceName?: string;
+  joinCode?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   workspace: Workspace | null;
   token: string | null;
   isAuthenticated: boolean;
+  hasWorkspace: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, workspaceName?: string) => Promise<void>;
+  register: (email: string, password: string, name: string, opts?: RegisterOptions) => Promise<void>;
+  createWorkspace: (name: string) => Promise<Workspace>;
+  joinWorkspace: (joinCode: string) => Promise<Workspace>;
+  switchWorkspace: (workspaceId: string) => Promise<Workspace>;
+  regenerateJoinCode: () => Promise<string>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
@@ -56,13 +67,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setWorkspace(newWs);
   };
 
-  const register = async (email: string, password: string, name: string, workspaceName?: string) => {
-    const res = await apiClient.register(email, password, name, workspaceName);
+  const register = async (email: string, password: string, name: string, opts?: RegisterOptions) => {
+    const res = await apiClient.register(email, password, name, opts);
     const { token: newToken, user: newUser, workspace: newWs } = res.data;
     localStorage.setItem('nexus_token', newToken);
     setToken(newToken);
     setUser(newUser);
     setWorkspace(newWs);
+  };
+
+  const createWorkspace = async (name: string): Promise<Workspace> => {
+    const res = await apiClient.createWorkspace(name);
+    const { token: newToken, workspace: newWs } = res.data;
+    if (newToken) {
+      localStorage.setItem('nexus_token', newToken);
+      setToken(newToken);
+    }
+    setWorkspace(newWs);
+    return newWs;
+  };
+
+  const joinWorkspace = async (joinCode: string): Promise<Workspace> => {
+    const res = await apiClient.joinWorkspace(joinCode);
+    const { token: newToken, workspace: newWs } = res.data;
+    if (newToken) {
+      localStorage.setItem('nexus_token', newToken);
+      setToken(newToken);
+    }
+    setWorkspace(newWs);
+    return newWs;
+  };
+
+  const switchWorkspace = async (workspaceId: string): Promise<Workspace> => {
+    const res = await apiClient.switchWorkspace(workspaceId);
+    const { token: newToken, workspace: newWs } = res.data;
+    if (newToken) {
+      localStorage.setItem('nexus_token', newToken);
+      setToken(newToken);
+    }
+    setWorkspace(newWs);
+    return newWs;
+  };
+
+  const regenerateJoinCode = async (): Promise<string> => {
+    const data = await apiClient.regenerateWorkspaceCode();
+    if (workspace && data.joinCode) {
+      setWorkspace({ ...workspace, joinCode: data.joinCode });
+    }
+    return data.joinCode;
   };
 
   const logout = async () => {
@@ -84,9 +136,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         workspace,
         token,
         isAuthenticated: Boolean(user && token),
+        hasWorkspace: Boolean(workspace),
         isLoading,
         login,
         register,
+        createWorkspace,
+        joinWorkspace,
+        switchWorkspace,
+        regenerateJoinCode,
         logout,
         refreshSession,
       }}
@@ -103,3 +160,4 @@ export const useAuth = () => {
   }
   return context;
 };
+export default AuthContext;

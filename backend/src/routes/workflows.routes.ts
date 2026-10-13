@@ -34,6 +34,14 @@ const listWorkflowsSchema = z.object({
 
 // Create and trigger planning
 router.post('/', authenticate, validateBody(createWorkflowSchema), async (req: Request, res: Response) => {
+  if (!req.user!.workspaceId) {
+    res.status(400).json({
+      success: false,
+      error: { code: 'NO_WORKSPACE', message: 'Please create or join a workspace before launching workflows.' },
+    });
+    return;
+  }
+
   try {
     const result = await createAndPlanWorkflow({
       workspaceId: req.user!.workspaceId,
@@ -60,6 +68,17 @@ router.post('/', authenticate, validateBody(createWorkflowSchema), async (req: R
 
 // List workflows
 router.get('/', authenticate, validateQuery(listWorkflowsSchema), async (req: Request, res: Response) => {
+  if (!req.user!.workspaceId) {
+    res.json({
+      success: true,
+      data: {
+        items: [],
+        pagination: { total: 0, page: 1, limit: 10, totalPages: 0 },
+      },
+    });
+    return;
+  }
+
   const { status, search, priority, page, limit, sort, order } = req.query as any;
   const offset = (page - 1) * limit;
 
